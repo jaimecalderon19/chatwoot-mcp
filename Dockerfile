@@ -8,4 +8,5 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /chatwoot-mc
 FROM gcr.io/distroless/static:nonroot
 COPY --from=build /chatwoot-mcp /chatwoot-mcp
 USER nonroot:nonroot
+EXPOSE 8080
 ENTRYPOINT ["/chatwoot-mcp"]

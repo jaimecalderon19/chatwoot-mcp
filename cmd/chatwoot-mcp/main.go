@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
+	"encoding/json"
 	"log/slog"
+	"net/http"
 	"os"
 	"strings"
 
@@ -59,10 +62,74 @@ func main() {
 		logger.Info("modo solo lectura")
 	}
 
-	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
-		logger.Error("servidor MCP", "error", err)
+	if cfg.Transport == "stdio" {
+		if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+			logger.Error("servidor MCP", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if cfg.AuthToken == "" {
+		logger.Warn("MCP_AUTH_TOKEN vacío: el endpoint MCP queda público")
+	}
+
+	mcpHandler := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
+		return server
+	}, &mcp.StreamableHTTPOptions{Logger: logger})
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "mcp": "/mcp"})
+			return
+		}
+		http.NotFound(w, r)
+	})
+	mux.Handle("/mcp", mcpHandler)
+	mux.Handle("/mcp/", mcpHandler)
+
+	handler := withAuth(cfg.AuthToken, mux)
+	logger.Info("mcp http", "addr", cfg.HTTPAddr, "path", "/mcp")
+	if err := http.ListenAndServe(cfg.HTTPAddr, handler); err != nil {
+		logger.Error("servidor HTTP", "error", err)
 		os.Exit(1)
 	}
+}
+
+func withAuth(token string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" || r.URL.Path == "/" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if token == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		got := bearerToken(r)
+		if subtle.ConstantTimeCompare([]byte(got), []byte(token)) != 1 {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func bearerToken(r *http.Request) string {
+	h := strings.TrimSpace(r.Header.Get("Authorization"))
+	if len(h) >= 7 && strings.EqualFold(h[:7], "bearer ") {
+		return strings.TrimSpace(h[7:])
+	}
+	if v := strings.TrimSpace(r.Header.Get("X-Api-Key")); v != "" {
+		return v
+	}
+	return h
 }
 
 func setupLogger(level string) *slog.Logger {

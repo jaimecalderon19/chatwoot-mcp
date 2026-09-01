@@ -17,6 +17,9 @@ type Config struct {
 	Timeout       time.Duration
 	AllowedLabels []string
 	ReadOnly      bool
+	Transport     string
+	HTTPAddr      string
+	AuthToken     string
 }
 
 func LoadDotEnv(path string) error {
@@ -110,11 +113,47 @@ func LoadConfig() (*Config, error) {
 
 	cfg.AllowedLabels = parseCSV(os.Getenv("CHATWOOT_ALLOWED_LABELS"))
 	cfg.ReadOnly = parseBool(os.Getenv("CHATWOOT_READONLY"))
+	cfg.AuthToken = strings.TrimSpace(os.Getenv("MCP_AUTH_TOKEN"))
+
+	transport, addr, err := listenSettings()
+	if err != nil {
+		errs = append(errs, err.Error())
+	} else {
+		cfg.Transport = transport
+		cfg.HTTPAddr = addr
+	}
 
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("%s", strings.Join(errs, "; "))
 	}
 	return cfg, nil
+}
+
+func listenSettings() (string, string, error) {
+	transport := strings.ToLower(strings.TrimSpace(os.Getenv("MCP_TRANSPORT")))
+	portRaw := strings.TrimSpace(os.Getenv("PORT"))
+	if portRaw == "" {
+		portRaw = strings.TrimSpace(os.Getenv("MCP_PORT"))
+	}
+	if transport == "" {
+		transport = "http"
+	}
+	switch transport {
+	case "http", "stdio":
+	default:
+		return "", "", fmt.Errorf("MCP_TRANSPORT debe ser http o stdio")
+	}
+	if transport == "stdio" {
+		return transport, "", nil
+	}
+	if portRaw == "" {
+		portRaw = "8080"
+	}
+	port, err := strconv.Atoi(portRaw)
+	if err != nil || port <= 0 || port > 65535 {
+		return "", "", fmt.Errorf("PORT debe ser un entero entre 1 y 65535")
+	}
+	return "http", fmt.Sprintf(":%d", port), nil
 }
 
 func normalizeBaseURL(raw string) (string, error) {

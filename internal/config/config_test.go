@@ -59,6 +59,12 @@ func TestLoadConfigOK(t *testing.T) {
 	if len(cfg.AllowedLabels) != 2 {
 		t.Errorf("AllowedLabels=%v", cfg.AllowedLabels)
 	}
+	if cfg.Transport != "http" {
+		t.Errorf("Transport=%q", cfg.Transport)
+	}
+	if cfg.HTTPAddr != ":8080" {
+		t.Errorf("HTTPAddr=%q", cfg.HTTPAddr)
+	}
 }
 
 func TestLoadConfigRejectsHTTP(t *testing.T) {
@@ -112,5 +118,37 @@ func TestLoadDotEnvDoesNotOverride(t *testing.T) {
 	}
 	if os.Getenv("BAR") != "filebar" {
 		t.Errorf("BAR=%q", os.Getenv("BAR"))
+	}
+}
+
+func TestHTTPPortFromEnv(t *testing.T) {
+	t.Setenv("CHATWOOT_BASE_URL", "https://app.chatwoot.com")
+	t.Setenv("CHATWOOT_API_TOKEN", "tok")
+	t.Setenv("CHATWOOT_ACCOUNT_ID", "1")
+	t.Setenv("PORT", "8080")
+	t.Setenv("MCP_AUTH_TOKEN", "secret")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Transport != "http" || cfg.HTTPAddr != ":8080" {
+		t.Fatalf("transport=%s addr=%s", cfg.Transport, cfg.HTTPAddr)
+	}
+	if cfg.AuthToken != "secret" {
+		t.Errorf("AuthToken")
+	}
+}
+
+func TestStdioTransport(t *testing.T) {
+	t.Setenv("CHATWOOT_BASE_URL", "https://app.chatwoot.com")
+	t.Setenv("CHATWOOT_API_TOKEN", "tok")
+	t.Setenv("CHATWOOT_ACCOUNT_ID", "1")
+	t.Setenv("MCP_TRANSPORT", "stdio")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Transport != "stdio" {
+		t.Errorf("Transport=%q", cfg.Transport)
 	}
 }
