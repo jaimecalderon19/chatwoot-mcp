@@ -1,0 +1,20 @@
+{
+  "payload": {
+    "id": 10,
+    "inbox_id": 2,
+    "status": "open",
+    "priority": "high",
+    "channel": "Channel::Api",
+    "labels": ["humano"],
+    "custom_attributes": {"etapa": "demo"},
+    "unread_count": 1,
+    "last_activity_at": 1756720800,
+    "created_at": 1756717200,
+    "meta": {
+      "sender": {"id": 5, "name": "Juan", "email": "juan@acme.com", "phone_number": "+573001111111"},
+      "assignee": {"id": 9, "name": "Ana"},
+      "team": {"id": 3, "name": "Ventas"}
+    },
+    "messages": [{"id": 1, "content": "hola", "message_type": 0}]
+  }
+}
